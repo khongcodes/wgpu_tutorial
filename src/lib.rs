@@ -4,6 +4,7 @@ use winit::{
     window::{ WindowBuilder, Window },
     dpi::PhysicalSize
 };
+use rand::prelude::*;
 
 #[cfg(target_arch="wasm32")]
 use wasm_bindgen::prelude::*;
@@ -96,13 +97,17 @@ pub async fn run() {
 }
 
 struct State {
+   instance: wgpu::Instance,
+   adapter: wgpu::Adapter,
    surface: wgpu::Surface,
    device: wgpu::Device,
    queue: wgpu::Queue,
    config: wgpu::SurfaceConfiguration,
    size: winit::dpi::PhysicalSize<u32>,
    window: Window,
+   clear_color: wgpu::Color,
 }
+
 
 impl State {
    // Creating some wgpu types requires async code
@@ -180,12 +185,15 @@ impl State {
       surface.configure(&device, &config);
 
       Self {
+         instance,
+         adapter,
          window,
          surface,
          device,
          queue,
          config,
-         size
+         size,
+         clear_color: wgpu::Color::BLACK
       }
    }
 
@@ -203,7 +211,18 @@ impl State {
    }
 
    fn input(&mut self, event: &WindowEvent) -> bool {
-      false
+      match event {
+         WindowEvent::CursorMoved { position, ..} => {
+            self.clear_color = wgpu::Color {
+               r: position.x as f64 / self.size.width as f64,
+               g: position.y as f64 / self.size.height as f64,
+               b: 1.0,
+               a: 1.0
+            };
+            true
+         },
+         _ => false
+      }
    }
 
    fn update(&mut self) {
@@ -246,12 +265,7 @@ impl State {
             view: &view,
             resolve_target: None,
             ops: wgpu::Operations {
-               load: wgpu::LoadOp::Clear(wgpu::Color {
-                  r: 0.1,
-                  g: 0.2,
-                  b: 0.3,
-                  a: 1.0,
-               }),
+               load: wgpu::LoadOp::Clear(self.clear_color),
                store:true,
             }
          })], 
