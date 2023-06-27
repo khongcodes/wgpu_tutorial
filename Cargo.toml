@@ -1,0 +1,35 @@
+[package]
+name = "wgpu_tutorial"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+winit = "0.28"
+env_logger = "0.10"
+log = "0.4"
+wgpu = "0.16"
+cfg-if = "1"
+pollster = "0.3"
+
+# below line specifies to only use these dependencies if we are targeting
+#     wasm32 architecture: these just make interfacing with javascript easier
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+console_log = "1.0"
+wgpu = { version = "0.16", features = ["webgl"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4.30"
+web-sys = { version = "0.3", features = [
+   "Document",
+   "Window",
+   "Element"
+]}
+
+[lib]
+# This tells cargo that we want to allow our crate to build a native Rust
+#     static library (rlib) and a C/C++ compatible library (cdylib)
+#     We need the rlib if we want to run wgpu in a desktop env, and
+#     we need cdylib to create Web Assembly
+crate-type = ["cdylib", "rlib"]
