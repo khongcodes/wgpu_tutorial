@@ -106,6 +106,7 @@ struct State {
    size: winit::dpi::PhysicalSize<u32>,
    window: Window,
    clear_color: wgpu::Color,
+   render_pipeline: wgpu::RenderPipeline,
 }
 
 
@@ -184,6 +185,96 @@ impl State {
       };
       surface.configure(&device, &config);
 
+
+      // SET UP PIPELINE
+
+      let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+         label: Some("Shader"),
+         source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+      });
+
+      let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+         label: Some("Render Pipeline Layout"),
+         bind_group_layouts: &[],
+         push_constant_ranges: &[]
+      });
+
+      let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
+         label: Some("Render Pipeline"),
+         layout: Some(&render_pipeline_layout), 
+         vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: "vs_main", // 1.
+            buffers: &[] // 2.
+         }, 
+         fragment: Some(wgpu::FragmentState { // 3.
+            module: &shader,
+            entry_point: "fs_main",
+            targets: &[Some(wgpu::ColorTargetState { // 4.
+               format: config.format,
+               blend: Some(wgpu::BlendState::REPLACE),
+               write_mask: wgpu::ColorWrites::ALL
+            })]
+         }), 
+         primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList, // 5.
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw, // 6.
+            cull_mode: Some(wgpu::Face::Back),
+            // below: Setting polygon_mode to anything other than Fill requires 
+            //          Features::NON_FILL_POLYGON_MODE
+            polygon_mode: wgpu::PolygonMode::Fill,
+            // below: requires Features::DEPTH_CLIP_CONTROL
+            unclipped_depth: false,
+            // below: requires Features::CONSERVATIVE_RASTERIZATION
+            conservative: false,
+         }, 
+         depth_stencil: None, // 7.
+         multisample: wgpu::MultisampleState {
+            count: 1, // 8.
+            mask: !0, // 9.
+            alpha_to_coverage_enabled: false, // 10.
+         }, 
+         multiview: None, // 11.
+      });
+
+      // 1. Specify which function inside the shader should be the entry_point:
+      //       functions we marked with @vertex and @fragment
+      // 
+      // 2. buffers tells the wgpu what type of vertices we want to pass to the
+      //       vertex shader - we're specifying the vertices in the shader itself
+      //       so this can be empty
+      // 
+      // 3. Fragment is technically optional so we wrap it in Some()
+      //       needed if we want to store color data to surface
+      // 
+      // 4. targets field tells wgpu what color outputs it should set up.
+      //       We only need one for the surface. We use the surface's format
+      //       so copying to the surface is easy.
+      //       We specify that the blending should replace old pixel data with new
+      //       We tell wgpu to write to R,G,B, and A (all colors)
+      // 
+      // 5. Using PrimitiveTopology::TriangleList means that every three vertices
+      //       will correspond to one triangle
+      // 
+      // 6. front_face and cull_mode tell wgpu how to determine whether a given
+      //       triangle is facing forward or noot
+      //       FrontFace::Ccw means that a triangle is facing forward if the
+      //       vertices are arranged in a counter-clockwise direction -
+      //       triangles not facing forward are culled (not included in render)
+      //       as specified by CullMode::Back
+      // 
+      // 7. We're not using a depth/stencil buffer so we leave this as None for now
+      // 
+      // 8. count field determines how many samples the pipeline will use
+      // 
+      // 9. mask field specifies which samples should be active
+      // 
+      // 10. alpha_to_coverage_enabled - anti-aliasing-related
+      // 
+      // 11. multiview - how many array layers the render attachments can have
+      //       We won't be rendering to array textures so we can set this as None
+
       Self {
          instance,
          adapter,
@@ -193,7 +284,8 @@ impl State {
          queue,
          config,
          size,
-         clear_color: wgpu::Color::BLACK
+         clear_color: wgpu::Color::BLACK,
+         render_pipeline
       }
    }
 
@@ -259,20 +351,28 @@ impl State {
       // 
       //    ops - takes wgpu::Operations object; tells wgpu what to do
       //          with the colors on the texture
-      let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { 
+      let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { 
          label:Some("Render Pass"),
-         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: &view,
-            resolve_target: None,
-            ops: wgpu::Operations {
-               load: wgpu::LoadOp::Clear(self.clear_color),
-               store:true,
+         color_attachments: &[
+            // This is what @location(0) in the fragment shader targets
+            Some(wgpu::RenderPassColorAttachment {
+               view: &view,
+               resolve_target: None,
+               ops: wgpu::Operations {
+                  load: wgpu::LoadOp::Clear(self.clear_color),
+                  store:true,
+               }
             }
-         })], 
+         )], 
          depth_stencil_attachment: None, 
       });
 
-      drop(_render_pass);
+      // After we set the pipeline to our built render pipeline, we can 
+      //    tell wgpu too draw smoething with 3 vertices and 1 instance
+      render_pass.set_pipeline(&self.render_pipeline);
+      render_pass.draw(0..3, 0..1);
+
+      drop(render_pass);
 
       // Finish the command buffer and send to gpu's render queue
       self.queue.submit(std::iter::once(encoder.finish()));
