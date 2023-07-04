@@ -5,6 +5,7 @@
 //    clip coordinates
 struct VertexOutput {
    @builtin(position) clip_position: vec4<f32>,
+   @location(1) color: vec4<f32>
 };
 
 // using @vertex we mark this function as a valid entry point for a
@@ -21,7 +22,9 @@ fn vs_main(
    // cast as f32 and i32
    let x = f32(1 - i32(in_vertex_index)) * 0.5;
    let y = f32(i32(in_vertex_index & 1u) * 2 - 1) * 0.5;
+
    out.clip_position = vec4<f32>(x, y, 0.0, 1.0);
+   out.color = vec4<f32>(smoothstep(-0.5, 0.5, x), smoothstep(-0.5, 0.5, y), 0.0, 1.0);
    return out;
 }
 
@@ -32,5 +35,5 @@ fn vs_main(
 // color target
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-   return vec4<f32>(0.3, 0.2, 0.1, 1.0);
+   return in.color;
 }

@@ -1,4 +1,3 @@
-use wgpu::include_wgsl;
 use winit::{
     event::*,
     event_loop::{ ControlFlow, EventLoop },
@@ -39,7 +38,7 @@ pub async fn run() {
       web_sys::window()
          .and_then(|win| win.document())
          .and_then(|doc| {
-            let dst = doc.body();
+            let dst = doc.get_element_by_id("wasm-entry")?;
             let canvas = web_sys::Element::from(window.canvas());
             dst.append_child(&canvas).ok()?;
             Some(())
@@ -106,10 +105,8 @@ struct State {
    config: wgpu::SurfaceConfiguration,
    size: winit::dpi::PhysicalSize<u32>,
    window: Window,
-   clear_color: wgpu::Color,
+   use_color: bool,
    render_pipeline: wgpu::RenderPipeline,
-   active_shader_file: &'static str,
-   alt_pipeline: wgpu::RenderPipeline,
 }
 
 
@@ -120,6 +117,10 @@ impl State {
 
       // The instance is the first thing you create when using wgpu
       //    Main purpose is to create Adapters and Surfaces
+      // 
+      // Adapter is a handle to our actual graphics card
+      // You can use this to get info about the graphics card
+      // You use this to create Device and Queue
       // 
       // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
       let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -132,14 +133,9 @@ impl State {
       // # Safety
       // 
       // The surface needs to live as long as the window that created it
-      // State owns the window (the same as it owns the surface)
-      // so this should be safe
+      // State owns the window so this should be safe
       let surface = unsafe { instance.create_surface(&window) }.unwrap();
 
-      // Adapter, we get from our wgpu instance
-      // It is a handle to our actual graphics card
-      // You can use this to get info about the graphics card
-      // You use this to create Device and Queue
       let adapter = instance.request_adapter(
          &wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
@@ -170,7 +166,7 @@ impl State {
 
       // Shader code in this tutorial assumes an sRGB surface texture. Using a different
       // one will result all the colors coming out darker. If you want to support
-      // non sRGB surfaces, you'll need to account f or that when drawing to the frame
+      // non sRGB surfaces, you'll need to account for that when drawing to the frame
       let surface_format = surface_caps.formats.iter()
          .copied()
          .find(|f| f.is_srgb())
@@ -192,13 +188,10 @@ impl State {
 
       // SET UP PIPELINE
 
-      let active_shader_file = "shader.wgsl";
-
-      let shader = device.create_shader_module(
-         include_wgsl!("shader.wgsl"),
-      );
-
-      let alt_shader = device.create_shader_module(include_wgsl!("shader-alt.wgsl"));
+      let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+         label: Some("Shader"),
+         source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+      });
 
       let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
          label: Some("Render Pipeline Layout"),
@@ -211,45 +204,6 @@ impl State {
          layout: Some(&render_pipeline_layout), 
          vertex: wgpu::VertexState {
             module: &shader,
-            entry_point: "vs_main", // 1.
-            buffers: &[] // 2.
-         }, 
-         fragment: Some(wgpu::FragmentState { // 3.
-            module: &shader,
-            entry_point: "fs_main",
-            targets: &[Some(wgpu::ColorTargetState { // 4.
-               format: config.format,
-               blend: Some(wgpu::BlendState::REPLACE),
-               write_mask: wgpu::ColorWrites::ALL
-            })]
-         }), 
-         primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList, // 5.
-            strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw, // 6.
-            cull_mode: Some(wgpu::Face::Back),
-            // below: Setting polygon_mode to anything other than Fill requires 
-            //          Features::NON_FILL_POLYGON_MODE
-            polygon_mode: wgpu::PolygonMode::Fill,
-            // below: requires Features::DEPTH_CLIP_CONTROL
-            unclipped_depth: false,
-            // below: requires Features::CONSERVATIVE_RASTERIZATION
-            conservative: false,
-         }, 
-         depth_stencil: None, // 7.
-         multisample: wgpu::MultisampleState {
-            count: 1, // 8.
-            mask: !0, // 9.
-            alpha_to_coverage_enabled: false, // 10.
-         }, 
-         multiview: None, // 11.
-      });
-
-      let alt_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
-         label: Some("Render Pipeline"),
-         layout: Some(&render_pipeline_layout), 
-         vertex: wgpu::VertexState {
-            module: &alt_shader,
             entry_point: "vs_main", // 1.
             buffers: &[] // 2.
          }, 
@@ -321,6 +275,8 @@ impl State {
       // 11. multiview - how many array layers the render attachments can have
       //       We won't be rendering to array textures so we can set this as None
 
+      let use_color = true;
+
       Self {
          instance,
          adapter,
@@ -331,9 +287,8 @@ impl State {
          config,
          size,
          clear_color: wgpu::Color::BLACK,
-         render_pipeline,
-         active_shader_file,
-         alt_pipeline
+         use_color,
+         render_pipeline
       }
    }
 
@@ -363,23 +318,12 @@ impl State {
          },
          WindowEvent::KeyboardInput { 
             input: KeyboardInput {
+               state,
                virtual_keycode: Some(VirtualKeyCode::Space),
-               state: ElementState::Pressed,
-               .. }, .. 
-         } => {
-            match self.active_shader_file {
-               "shader.wgsl" => {
-                  self.active_shader_file = "shader-alt.wgsl";
-                  std::mem::swap(&mut self.render_pipeline, &mut self.alt_pipeline);
-                  true
-               },
-               "shader-alt.wgsl" => {
-                  self.active_shader_file = "shader.wgsl";
-                  std::mem::swap(&mut self.render_pipeline, &mut self.alt_pipeline);
-                  true
-               },
-               _ => { true }
-            }
+               ..
+            }, .. } => {
+            self.use_color = *state == ElementState::Released;
+            true
          }
          _ => false
       }
