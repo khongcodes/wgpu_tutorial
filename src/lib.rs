@@ -5,6 +5,7 @@ use winit::{
     dpi::PhysicalSize
 };
 use rand::prelude::*;
+use wgpu::util::DeviceExt;
 
 #[cfg(target_arch="wasm32")]
 use wasm_bindgen::prelude::*;
@@ -107,8 +108,33 @@ struct State {
    window: Window,
    clear_color: wgpu::Color,
    render_pipeline: wgpu::RenderPipeline,
+   vertex_buffer: wgpu::Buffer,
+   // num_vertices: u32,
+   index_buffer: wgpu::Buffer,
+   num_indices: u32
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+   position: [f32; 3],
+   color: [f32; 3]
+}
+
+const VERTICES: &[Vertex] = &[
+   Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [0.5, 0.0, 0.5] }, // A
+   Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.5, 0.0, 0.5] }, // B
+   Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.5, 0.0, 0.5] }, // C
+   Vertex { position: [0.35966998, -0.3473291, 0.0], color: [0.5, 0.0, 0.5] }, // D
+   Vertex { position: [0.44147372, 0.2347359, 0.0], color: [0.5, 0.0, 0.5] }, // E
+];
+// vertices are arranged in counter-clockwise fashion
+
+const INDICES: &[u16] = &[
+   0, 1, 4,
+   1, 2, 4,
+   2, 3, 4
+];
 
 impl State {
    // Creating some wgpu types requires async code
@@ -205,7 +231,7 @@ impl State {
          vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main", // 1.
-            buffers: &[] // 2.
+            buffers: &[ Vertex::desc(), ] // 2.
          }, 
          fragment: Some(wgpu::FragmentState { // 3.
             module: &shader,
@@ -275,6 +301,24 @@ impl State {
       // 11. multiview - how many array layers the render attachments can have
       //       We won't be rendering to array textures so we can set this as None
 
+      let vertex_buffer = device.create_buffer_init(
+         &wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX
+         }
+      );
+      // let num_vertices = VERTICES.len() as u32;
+
+      let index_buffer = device.create_buffer_init(
+         &wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        }
+      );
+      let num_indices = INDICES.len() as u32;
+
       Self {
          instance,
          adapter,
@@ -285,7 +329,11 @@ impl State {
          config,
          size,
          clear_color: wgpu::Color::BLACK,
-         render_pipeline
+         render_pipeline,
+         vertex_buffer,
+         // num_vertices,
+         index_buffer,
+         num_indices
       }
    }
 
@@ -369,8 +417,12 @@ impl State {
 
       // After we set the pipeline to our built render pipeline, we can 
       //    tell wgpu too draw smoething with 3 vertices and 1 instance
+      // 
+      // Note: You can have multiple vertex buffers set at once. You can only have one index buffer set at once.
       render_pass.set_pipeline(&self.render_pipeline);
-      render_pass.draw(0..3, 0..1);
+      render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+      render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+      render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
 
       drop(render_pass);
 
@@ -379,5 +431,26 @@ impl State {
       output.present();
 
       Ok(())
+   }
+}
+
+impl Vertex {
+   fn desc() -> wgpu::VertexBufferLayout<'static> {
+      wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[
+            wgpu::VertexAttribute {
+               format: wgpu::VertexFormat::Float32x3,
+               offset: 0,
+               shader_location: 0,
+            },
+            wgpu::VertexAttribute {
+               format: wgpu::VertexFormat::Float32x3,
+               offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+               shader_location: 1,
+            }
+        ],
+    }
    }
 }
