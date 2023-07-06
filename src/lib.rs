@@ -122,18 +122,27 @@ struct Vertex {
 }
 
 const VERTICES: &[Vertex] = &[
-   Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [0.5, 0.0, 0.5] }, // A
-   Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.5, 0.0, 0.5] }, // B
-   Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.5, 0.0, 0.5] }, // C
-   Vertex { position: [0.35966998, -0.3473291, 0.0], color: [0.5, 0.0, 0.5] }, // D
-   Vertex { position: [0.44147372, 0.2347359, 0.0], color: [0.5, 0.0, 0.5] }, // E
+   Vertex { position: [-0.55, 0.5, 0.0], color: [0.5, 0.0, 0.5] }, // A
+   Vertex { position: [-0.8, 0.066987, 0.0], color: [0.5, 0.0, 0.5] }, // B
+   Vertex { position: [-0.3, 0.066987, 0.0], color: [0.5, 0.0, 0.5] }, // C
+   Vertex { position: [0.13302, 0.82139, 0.0], color: [0.5, 0.0, 0.5] }, // D
+   Vertex { position: [-0.25, 0.5, 0.0], color: [0.5, 0.0, 0.5] }, // E
+   Vertex { position: [0.219846, 0.32899, 0.0], color: [0.5, 0.0, 0.5] }, // F
+   Vertex { position: [-0.163176, 0.007596, 0.0], color: [0.5, 0.0, 0.5] }, // G
+   Vertex { position: [0.30667, -0.163414, 0.0], color: [0.5, 0.0, 0.5] }, // H
+   Vertex { position: [0.68969, 0.15798, 0.0], color: [0.5, 0.0, 0.5] }, // I
+   Vertex { position: [0.602868, 0.65038, 0.0], color: [0.5, 0.0, 0.5] }, // J
 ];
 // vertices are arranged in counter-clockwise fashion
 
 const INDICES: &[u16] = &[
-   0, 1, 4,
-   1, 2, 4,
-   2, 3, 4
+   0, 1, 2,
+   3, 4, 5,
+   4, 6, 5,
+   5, 6, 7,
+   5, 7, 8,
+   9, 5, 8,
+   3, 5, 9
 ];
 
 impl State {
