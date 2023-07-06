@@ -109,9 +109,11 @@ struct State {
    clear_color: wgpu::Color,
    render_pipeline: wgpu::RenderPipeline,
    vertex_buffer: wgpu::Buffer,
-   // num_vertices: u32,
+   alt_vertex_buffer: wgpu::Buffer,
+   num_vertices: u32,
    index_buffer: wgpu::Buffer,
-   num_indices: u32
+   num_indices: u32,
+   use_indices: bool,
 }
 
 #[repr(C)]
@@ -122,16 +124,25 @@ struct Vertex {
 }
 
 const VERTICES: &[Vertex] = &[
-   Vertex { position: [-0.55, 0.5, 0.0], color: [0.5, 0.0, 0.5] }, // A
-   Vertex { position: [-0.8, 0.066987, 0.0], color: [0.5, 0.0, 0.5] }, // B
-   Vertex { position: [-0.3, 0.066987, 0.0], color: [0.5, 0.0, 0.5] }, // C
-   Vertex { position: [0.13302, 0.82139, 0.0], color: [0.5, 0.0, 0.5] }, // D
-   Vertex { position: [-0.25, 0.5, 0.0], color: [0.5, 0.0, 0.5] }, // E
-   Vertex { position: [0.219846, 0.32899, 0.0], color: [0.5, 0.0, 0.5] }, // F
-   Vertex { position: [-0.163176, 0.007596, 0.0], color: [0.5, 0.0, 0.5] }, // G
-   Vertex { position: [0.30667, -0.163414, 0.0], color: [0.5, 0.0, 0.5] }, // H
-   Vertex { position: [0.68969, 0.15798, 0.0], color: [0.5, 0.0, 0.5] }, // I
-   Vertex { position: [0.602868, 0.65038, 0.0], color: [0.5, 0.0, 0.5] }, // J
+   Vertex { position: [-0.55, 0.5, 0.0], color: [0.5, 0.0, 0.5] }, // 0
+   Vertex { position: [-0.8, 0.066987, 0.0], color: [0.5, 0.0, 0.5] }, // 1
+   Vertex { position: [-0.3, 0.066987, 0.0], color: [0.5, 0.0, 0.5] }, // 2
+   Vertex { position: [0.13302, 0.82139, 0.0], color: [0.5, 0.0, 0.5] }, // 3
+   Vertex { position: [-0.25, 0.5, 0.0], color: [0.5, 0.0, 0.5] }, // 4
+   Vertex { position: [0.219846, 0.32899, 0.0], color: [0.5, 0.0, 0.5] }, // 5
+   Vertex { position: [-0.163176, 0.007596, 0.0], color: [0.5, 0.0, 0.5] }, // 6
+   Vertex { position: [0.30667, -0.163414, 0.0], color: [0.5, 0.0, 0.5] }, // 7
+   Vertex { position: [0.68969, 0.15798, 0.0], color: [0.5, 0.0, 0.5] }, // 8
+   Vertex { position: [0.602868, 0.65038, 0.0], color: [0.5, 0.0, 0.5] }, // 9
+];
+
+const ONLYVERTICES: &[Vertex] = &[
+   Vertex { position: [0.13302, 0.82139, 0.0], color: [0.5, 0.0, 0.5] },
+   Vertex { position: [-0.25, 0.5, 0.0], color: [0.5, 0.0, 0.5] },
+   Vertex { position: [0.219846, 0.32899, 0.0], color: [0.5, 0.0, 0.5] },
+   Vertex { position: [-0.25, 0.5, 0.0], color: [0.5, 0.0, 0.5] },
+   Vertex { position: [-0.163176, 0.007596, 0.0], color: [0.5, 0.0, 0.5] },
+   Vertex { position: [0.219846, 0.32899, 0.0], color: [0.5, 0.0, 0.5] }
 ];
 // vertices are arranged in counter-clockwise fashion
 
@@ -240,7 +251,7 @@ impl State {
          vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main", // 1.
-            buffers: &[ Vertex::desc(), ] // 2.
+            buffers: &[ Vertex::desc() ] // 2.
          }, 
          fragment: Some(wgpu::FragmentState { // 3.
             module: &shader,
@@ -317,7 +328,14 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX
          }
       );
-      // let num_vertices = VERTICES.len() as u32;
+      let alt_vertex_buffer = device.create_buffer_init(
+         &wgpu::util::BufferInitDescriptor {
+            label: Some("Alt Vertex Buffer"),
+            contents: bytemuck::cast_slice(ONLYVERTICES),
+            usage: wgpu::BufferUsages::VERTEX
+         }
+      );
+      let num_vertices = ONLYVERTICES.len() as u32;
 
       let index_buffer = device.create_buffer_init(
          &wgpu::util::BufferInitDescriptor {
@@ -327,6 +345,8 @@ impl State {
         }
       );
       let num_indices = INDICES.len() as u32;
+
+      let use_indices = true;
 
       Self {
          instance,
@@ -340,9 +360,11 @@ impl State {
          clear_color: wgpu::Color::BLACK,
          render_pipeline,
          vertex_buffer,
-         // num_vertices,
+         alt_vertex_buffer,
+         num_vertices,
          index_buffer,
-         num_indices
+         num_indices,
+         use_indices
       }
    }
 
@@ -370,6 +392,15 @@ impl State {
             };
             true
          },
+         WindowEvent::KeyboardInput { 
+            input: KeyboardInput {
+                state: ElementState::Pressed,
+                virtual_keycode: Some(VirtualKeyCode::Space),
+                ..
+            }, ..} => {
+               self.use_indices = !self.use_indices;
+               true
+            }
          _ => false
       }
    }
@@ -429,9 +460,15 @@ impl State {
       // 
       // Note: You can have multiple vertex buffers set at once. You can only have one index buffer set at once.
       render_pass.set_pipeline(&self.render_pipeline);
-      render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-      render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-      render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+
+      if self.use_indices {
+         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+      } else {
+         render_pass.set_vertex_buffer(0, self.alt_vertex_buffer.slice(..));
+         render_pass.draw(0..self.num_vertices, 0..1);
+      }
 
       drop(render_pass);
 
