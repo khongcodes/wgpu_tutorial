@@ -211,6 +211,9 @@ impl State {
       };
       surface.configure(&device, &config);
 
+      let diffuse_bytes = include_bytes!("happy-tree.png");
+      let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
+      let diffuse_rgba = diffuse_image.to_rgba8();
 
       // SET UP PIPELINE
 
