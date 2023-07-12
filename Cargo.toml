@@ -15,6 +15,7 @@ pollster = "0.3"
 rand = "0.8.5"
 bytemuck = { version = "1.12", features = ["derive"] }
 image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
+anyhow = "1.0.71"
 
 # below line specifies to only use these dependencies if we are targeting
 #     wasm32 architecture: these just make interfacing with javascript easier
